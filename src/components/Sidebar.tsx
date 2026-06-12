@@ -16,6 +16,7 @@ import { useAppStore } from '../store/appStore';
 const menuItems = [
   { id: 'catalog', label: '能力目录', icon: LayoutGrid, path: '/' },
   { id: 'applications', label: '应用管理', icon: Package, path: '/applications' },
+  { id: 'credentials', label: '调用凭证', icon: FileText, path: '/credentials' },
   { id: 'approvals', label: '申请审批', icon: Settings, path: '/approvals' },
   { id: 'monitoring', label: '用量监控', icon: BarChart3, path: '/monitoring' },
   { id: 'notifications', label: '故障公告', icon: AlertTriangle, path: '/announcements' },

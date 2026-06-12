@@ -22,6 +22,7 @@ const tabs = [
   { id: 'overview', label: '概览', icon: FileText },
   { id: 'capabilities', label: '能力管理', icon: Package },
   { id: 'users', label: '用户管理', icon: Users },
+  { id: 'logs', label: '操作日志', icon: FileText },
 ];
 
 const mockUsageStats = [
@@ -34,7 +35,7 @@ const mockUsageStats = [
 ];
 
 export default function AdminDashboard() {
-  const { capabilities, users, approvals, addCapability, deleteCapability, deleteUser } = useAppStore();
+  const { capabilities, users, approvals, applications, addCapability, deleteCapability, deleteUser, getOperationLogs } = useAppStore();
   const [activeTab, setActiveTab] = useState('overview');
   const [searchQuery, setSearchQuery] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -365,6 +366,66 @@ export default function AdminDashboard() {
                         </td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'logs' && (
+          <div>
+            <div className="flex items-center justify-between mb-6">
+              <div className="relative">
+                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="搜索应用..."
+                  className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+                />
+              </div>
+              <select className="input-field w-40">
+                <option value="">全部应用</option>
+                {applications.map(app => (
+                  <option key={app.id} value={app.id}>{app.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div className="card">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">时间</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">应用</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">操作人</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">操作类型</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">详情</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {getOperationLogs().length === 0 ? (
+                      <tr>
+                        <td colSpan={5} className="py-8 text-center text-gray-500">暂无操作日志</td>
+                      </tr>
+                    ) : (
+                      getOperationLogs().map((log) => (
+                        <tr key={log.id} className="border-b border-gray-50 hover:bg-gray-50">
+                          <td className="py-3 px-4 text-sm text-gray-500">{formatDate(log.createdAt)}</td>
+                          <td className="py-3 px-4 text-sm font-medium text-gray-800">{log.applicationName}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600">{log.userName}</td>
+                          <td className="py-3 px-4">
+                            <span className="text-xs px-2 py-1 bg-primary-100 text-primary-700 rounded">
+                              {log.operationName}
+                            </span>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-600">{log.detail}</td>
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>

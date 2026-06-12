@@ -149,3 +149,15 @@ export interface FAQ {
   category: string;
   createdAt: string;
 }
+
+export interface OperationLog {
+  id: string;
+  userId: string;
+  userName: string;
+  applicationId: string;
+  applicationName: string;
+  operation: 'create_app' | 'update_quota' | 'add_whitelist' | 'remove_whitelist' | 'create_credential' | 'rotate_credential' | 'delete_credential';
+  operationName: string;
+  detail: string;
+  createdAt: string;
+}

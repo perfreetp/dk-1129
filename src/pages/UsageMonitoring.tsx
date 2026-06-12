@@ -1,22 +1,47 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
-import { AlertTriangle, Bell, Download, TrendingUp, TrendingDown, Activity, Clock, Zap } from 'lucide-react';
+import { AlertTriangle, Bell, Download, TrendingUp, TrendingDown, Activity, Clock, Zap, FileText } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { formatNumber } from '../utils/helpers';
 import Header from '../components/Header';
 import Modal from '../components/Modal';
 
-const weekDays = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+const COLORS = ['#165DFF', '#00B42A', '#FF7D00', '#F53F3F', '#8F5CF6'];
 
-const mockUsageData = [
-  { name: '周一', calls: 1200, success: 1180, fail: 20 },
-  { name: '周二', calls: 1500, success: 1470, fail: 30 },
-  { name: '周三', calls: 1800, success: 1760, fail: 40 },
-  { name: '周四', calls: 1300, success: 1270, fail: 30 },
-  { name: '周五', calls: 1600, success: 1580, fail: 20 },
-  { name: '周六', calls: 800, success: 790, fail: 10 },
-  { name: '周日', calls: 600, success: 595, fail: 5 },
-];
+const generateDataForRange = (range: string) => {
+  const baseData = {
+    '24h': [
+      { name: '00:00', calls: 50, success: 48, fail: 2 },
+      { name: '04:00', calls: 30, success: 29, fail: 1 },
+      { name: '08:00', calls: 120, success: 115, fail: 5 },
+      { name: '12:00', calls: 200, success: 195, fail: 5 },
+      { name: '16:00', calls: 180, success: 175, fail: 5 },
+      { name: '20:00', calls: 100, success: 98, fail: 2 },
+    ],
+    '7d': [
+      { name: '周一', calls: 1200, success: 1180, fail: 20 },
+      { name: '周二', calls: 1500, success: 1470, fail: 30 },
+      { name: '周三', calls: 1800, success: 1760, fail: 40 },
+      { name: '周四', calls: 1300, success: 1270, fail: 30 },
+      { name: '周五', calls: 1600, success: 1580, fail: 20 },
+      { name: '周六', calls: 800, success: 790, fail: 10 },
+      { name: '周日', calls: 600, success: 595, fail: 5 },
+    ],
+    '30d': Array.from({ length: 30 }, (_, i) => ({
+      name: `${i + 1}日`,
+      calls: Math.floor(Math.random() * 500) + 800,
+      success: Math.floor(Math.random() * 480) + 780,
+      fail: Math.floor(Math.random() * 30) + 5,
+    })),
+    '90d': Array.from({ length: 12 }, (_, i) => ({
+      name: `第${i + 1}周`,
+      calls: Math.floor(Math.random() * 2000) + 5000,
+      success: Math.floor(Math.random() * 1900) + 4900,
+      fail: Math.floor(Math.random() * 100) + 20,
+    })),
+  };
+  return baseData[range as keyof typeof baseData] || baseData['7d'];
+};
 
 const errorDistribution = [
   { name: '参数错误', value: 35 },
@@ -25,8 +50,6 @@ const errorDistribution = [
   { name: '超时', value: 15 },
   { name: '其他', value: 5 },
 ];
-
-const COLORS = ['#165DFF', '#00B42A', '#FF7D00', '#F53F3F', '#8F5CF6'];
 
 const mockAlerts = [
   { id: '1', type: 'warning', title: '调用量异常', message: '短信服务调用量突增50%', time: '10分钟前', status: 'active' },
@@ -40,10 +63,19 @@ export default function UsageMonitoring() {
   const [timeRange, setTimeRange] = useState('7d');
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [alertConfig, setAlertConfig] = useState({ threshold: 90, enabled: true });
+  const [exportHistory, setExportHistory] = useState<Array<{
+    id: string;
+    capability: string;
+    timeRange: string;
+    date: string;
+    fileName: string;
+  }>>([]);
 
-  const totalCalls = mockUsageData.reduce((sum, item) => sum + item.calls, 0);
-  const totalSuccess = mockUsageData.reduce((sum, item) => sum + item.success, 0);
-  const successRate = ((totalSuccess / totalCalls) * 100).toFixed(1);
+  const usageData = useMemo(() => generateDataForRange(timeRange), [timeRange]);
+
+  const totalCalls = useMemo(() => usageData.reduce((sum, item) => sum + item.calls, 0), [usageData]);
+  const totalSuccess = useMemo(() => usageData.reduce((sum, item) => sum + item.success, 0), [usageData]);
+  const successRate = useMemo(() => ((totalSuccess / totalCalls) * 100).toFixed(1), [totalSuccess, totalCalls]);
 
   const capabilityOptions = [
     { value: 'all', label: '全部能力' },
@@ -62,7 +94,7 @@ export default function UsageMonitoring() {
       ? '全部能力' 
       : capabilities.find(c => c.id === selectedCapability)?.name || '未知';
     
-    const reportData = mockUsageData.map(item => ({
+    const reportData = usageData.map(item => ({
       日期: item.name,
       总调用量: item.calls,
       成功调用: item.success,
@@ -80,22 +112,31 @@ export default function UsageMonitoring() {
     const errorSummary = `\n\n错误原因分布\n错误类型,次数\n${errorDistribution.map(e => `${e.name},${e.value}`).join('\n')}`;
 
     const fullReport = csvHeader + csvContent + summary + errorSummary;
+    const fileName = `用量报表_${selectedCap}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.csv`;
     
     const blob = new Blob(['\ufeff' + fullReport], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     const url = URL.createObjectURL(blob);
     link.setAttribute('href', url);
-    link.setAttribute('download', `用量报表_${selectedCap}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.csv`);
+    link.setAttribute('download', fileName);
     link.style.visibility = 'hidden';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
+
+    setExportHistory(prev => [{
+      id: Date.now().toString(),
+      capability: selectedCap,
+      timeRange: timeRangeOptions.find(o => o.value === timeRange)?.label || '',
+      date: new Date().toLocaleString('zh-CN'),
+      fileName,
+    }, ...prev].slice(0, 10));
   };
 
   return (
     <div className="flex-1 flex flex-col overflow-auto">
-      <Header title="用量监控" subtitle="查看能力调用数据和告警" showSearch={false} />
+      <Header title="用量监控" subtitle="月报中心" showSearch={false} />
       
       <main className="flex-1 p-6 overflow-auto">
         <div className="flex items-center justify-between mb-6">
@@ -133,7 +174,7 @@ export default function UsageMonitoring() {
                 <p className="text-2xl font-bold text-gray-800">{formatNumber(totalCalls)}</p>
                 <p className="text-xs text-success-600 flex items-center gap-1 mt-1">
                   <TrendingUp className="w-3 h-3" />
-                  +12.5% 较上周
+                  +12.5% 较上期
                 </p>
               </div>
               <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
@@ -149,7 +190,7 @@ export default function UsageMonitoring() {
                 <p className="text-2xl font-bold text-gray-800">{successRate}%</p>
                 <p className="text-xs text-success-600 flex items-center gap-1 mt-1">
                   <TrendingUp className="w-3 h-3" />
-                  +0.5% 较上周
+                  +0.5% 较上期
                 </p>
               </div>
               <div className="w-12 h-12 bg-success-100 rounded-xl flex items-center justify-center">
@@ -162,10 +203,10 @@ export default function UsageMonitoring() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">错误数</p>
-                <p className="text-2xl font-bold text-gray-800">155</p>
+                <p className="text-2xl font-bold text-gray-800">{usageData.reduce((sum, item) => sum + item.fail, 0)}</p>
                 <p className="text-xs text-danger-600 flex items-center gap-1 mt-1">
                   <TrendingDown className="w-3 h-3" />
-                  -18% 较上周
+                  -18% 较上期
                 </p>
               </div>
               <div className="w-12 h-12 bg-danger-100 rounded-xl flex items-center justify-center">
@@ -181,7 +222,7 @@ export default function UsageMonitoring() {
                 <p className="text-2xl font-bold text-gray-800">45ms</p>
                 <p className="text-xs text-success-600 flex items-center gap-1 mt-1">
                   <TrendingDown className="w-3 h-3" />
-                  -5ms 较上周
+                  -5ms 较上期
                 </p>
               </div>
               <div className="w-12 h-12 bg-warning-100 rounded-xl flex items-center justify-center">
@@ -195,7 +236,7 @@ export default function UsageMonitoring() {
           <div className="lg:col-span-2 card">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">调用量趋势</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={mockUsageData}>
+              <BarChart data={usageData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis />
@@ -211,7 +252,7 @@ export default function UsageMonitoring() {
           <div className="card">
             <h3 className="text-lg font-semibold text-gray-800 mb-4">成功率趋势</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={mockUsageData}>
+              <LineChart data={usageData}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
                 <YAxis domain={[80, 100]} />
@@ -293,49 +334,29 @@ export default function UsageMonitoring() {
         </div>
 
         <div className="card">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">最近错误详情</h3>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-100">
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">时间</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">能力名称</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">错误类型</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">错误信息</th>
-                  <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">请求ID</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm text-gray-600">2024-01-15 14:32:18</td>
-                  <td className="py-3 px-4 text-sm text-gray-800">短信服务</td>
-                  <td className="py-3 px-4">
-                    <span className="text-xs px-2 py-1 bg-danger-100 text-danger-700 rounded">参数错误</span>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">手机号格式不正确</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">req-20240115-001</td>
-                </tr>
-                <tr className="border-b border-gray-50 hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm text-gray-600">2024-01-15 14:30:05</td>
-                  <td className="py-3 px-4 text-sm text-gray-800">地图服务</td>
-                  <td className="py-3 px-4">
-                    <span className="text-xs px-2 py-1 bg-warning-100 text-warning-700 rounded">服务异常</span>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">第三方服务超时</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">req-20240115-002</td>
-                </tr>
-                <tr className="hover:bg-gray-50">
-                  <td className="py-3 px-4 text-sm text-gray-600">2024-01-15 14:28:42</td>
-                  <td className="py-3 px-4 text-sm text-gray-800">支付服务</td>
-                  <td className="py-3 px-4">
-                    <span className="text-xs px-2 py-1 bg-info-100 text-info-700 rounded">权限不足</span>
-                  </td>
-                  <td className="py-3 px-4 text-sm text-gray-600">应用未开通该能力</td>
-                  <td className="py-3 px-4 text-sm text-gray-600">req-20240115-003</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <h3 className="text-lg font-semibold text-gray-800 mb-4">最近导出记录</h3>
+          {exportHistory.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">暂无导出记录</p>
+          ) : (
+            <div className="space-y-3">
+              {exportHistory.map((record) => (
+                <div key={record.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <FileText className="w-5 h-5 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-800">{record.fileName}</p>
+                      <p className="text-xs text-gray-500">
+                        能力: {record.capability} | 时间范围: {record.timeRange} | {record.date}
+                      </p>
+                    </div>
+                  </div>
+                  <button className="text-sm text-primary-600 hover:text-primary-700">
+                    重新下载
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </main>
 

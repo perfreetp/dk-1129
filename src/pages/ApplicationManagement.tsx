@@ -10,7 +10,7 @@ import EmptyState from '../components/EmptyState';
 
 export default function ApplicationManagement() {
   const navigate = useNavigate();
-  const { applications, addApplication, deleteApplication, updateApplication, currentUser, getCredentialsByAppId, addWhitelist, removeWhitelist } = useAppStore();
+  const { applications, addApplication, deleteApplication, updateApplication, currentUser, getCredentialsByAppId, addWhitelist, removeWhitelist, addOperationLog, getApprovalsByUserId, getCapabilityById } = useAppStore();
   
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -27,6 +27,7 @@ export default function ApplicationManagement() {
 
   const handleCreate = () => {
     if (!formData.name.trim()) return;
+    const appId = Date.now().toString();
     addApplication({
       name: formData.name,
       description: formData.description,
@@ -36,6 +37,15 @@ export default function ApplicationManagement() {
       quota: 10000,
       quotaUsed: 0,
       whitelist: [],
+    });
+    addOperationLog({
+      userId: currentUser.id,
+      userName: currentUser.name,
+      applicationId: appId,
+      applicationName: formData.name,
+      operation: 'create_app',
+      operationName: '创建应用',
+      detail: `创建应用 "${formData.name}"`,
     });
     setShowCreateModal(false);
     setFormData({ name: '', description: '' });
@@ -60,7 +70,18 @@ export default function ApplicationManagement() {
 
   const handleUpdateQuota = () => {
     if (editAppId && editQuota > 0) {
+      const app = applications.find(a => a.id === editAppId);
+      const oldQuota = app?.quota || 0;
       updateApplication(editAppId, { quota: editQuota });
+      addOperationLog({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        applicationId: editAppId,
+        applicationName: app?.name || '',
+        operation: 'update_quota',
+        operationName: '更新额度',
+        detail: `额度从 ${oldQuota} 调整为 ${editQuota}`,
+      });
       setShowQuotaModal(false);
       setEditAppId('');
     }
@@ -73,13 +94,33 @@ export default function ApplicationManagement() {
 
   const handleAddWhitelist = () => {
     if (editAppId && newWhitelistIP.trim()) {
+      const app = applications.find(a => a.id === editAppId);
       addWhitelist(editAppId, newWhitelistIP.trim());
+      addOperationLog({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        applicationId: editAppId,
+        applicationName: app?.name || '',
+        operation: 'add_whitelist',
+        operationName: '添加白名单',
+        detail: `添加IP地址: ${newWhitelistIP.trim()}`,
+      });
       setNewWhitelistIP('');
     }
   };
 
   const handleRemoveWhitelist = (appId: string, ip: string) => {
+    const app = applications.find(a => a.id === appId);
     removeWhitelist(appId, ip);
+    addOperationLog({
+      userId: currentUser.id,
+      userName: currentUser.name,
+      applicationId: appId,
+      applicationName: app?.name || '',
+      operation: 'remove_whitelist',
+      operationName: '删除白名单',
+      detail: `删除IP地址: ${ip}`,
+    });
   };
 
   const getActionButtons = (appId: string) => {
@@ -90,6 +131,15 @@ export default function ApplicationManagement() {
       { icon: Settings, label: '额度配置', action: () => openQuotaModal(appId) },
       { icon: Globe, label: '白名单', action: () => openWhitelistModal(appId) },
     ];
+  };
+
+  const getApprovedCapabilities = (appId: string) => {
+    const approvals = getApprovalsByUserId(currentUser.id);
+    const approved = approvals.filter(a => a.applicationId === appId && a.status === 'approved');
+    return approved.map(a => {
+      const cap = getCapabilityById(a.capabilityId);
+      return { ...a, capability: cap };
+    }).filter(a => a.capability);
   };
 
   return (
@@ -139,6 +189,7 @@ export default function ApplicationManagement() {
               const statusBadge = getStatusBadge(app.status);
               const percentage = calculatePercentage(app.quotaUsed, app.quota);
               const actions = getActionButtons(app.id);
+              const approvedCaps = getApprovedCapabilities(app.id);
               
               return (
                 <div key={app.id} className="card-hover">
@@ -201,6 +252,21 @@ export default function ApplicationManagement() {
                         +{app.whitelist.length - 3}
                       </span>
                     )}
+                  </div>
+                  
+                  <div className="mb-4">
+                    <p className="text-xs text-gray-500 mb-2">已开通能力</p>
+                    <div className="flex flex-wrap gap-2">
+                      {approvedCaps.length === 0 ? (
+                        <span className="text-xs text-gray-400">暂无开通能力</span>
+                      ) : (
+                        approvedCaps.map((item) => (
+                          <span key={item.capabilityId} className="text-xs px-2 py-1 bg-success-100 text-success-700 rounded">
+                            {item.capability?.name}
+                          </span>
+                        ))
+                      )}
+                    </div>
                   </div>
                   
                   <div className="pt-4 border-t border-gray-100">

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Capability, Application, Credential, Approval, Notification, User, AlertRule, Rating } from '../types';
+import { Capability, Application, Credential, Approval, Notification, User, AlertRule, Rating, OperationLog } from '../types';
 import { mockCapabilities, mockApplications, mockCredentials, mockApprovals, mockNotifications, mockUsers, mockAlertRules, mockRatings } from '../data/mockData';
 
 interface AppStore {
@@ -11,6 +11,7 @@ interface AppStore {
   users: User[];
   alertRules: AlertRule[];
   ratings: Rating[];
+  operationLogs: OperationLog[];
   currentUser: User;
   selectedDomain: string;
   searchKeyword: string;
@@ -61,6 +62,10 @@ interface AppStore {
   addRating: (rating: Omit<Rating, 'id' | 'createdAt'>) => void;
   getRatingsByCapabilityId: (capabilityId: string) => Rating[];
   updateCapabilityRating: (capabilityId: string) => void;
+
+  addOperationLog: (log: Omit<OperationLog, 'id' | 'createdAt'>) => void;
+  getOperationLogs: () => OperationLog[];
+  getOperationLogsByAppId: (appId: string) => OperationLog[];
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -72,6 +77,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   users: mockUsers,
   alertRules: mockAlertRules,
   ratings: mockRatings,
+  operationLogs: [],
   currentUser: mockUsers[0],
   selectedDomain: '全部',
   searchKeyword: '',
@@ -382,5 +388,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
           : cap
       ),
     }));
+  },
+
+  addOperationLog: (log) => {
+    const newLog: OperationLog = {
+      ...log,
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+    };
+    set((state) => ({ operationLogs: [newLog, ...state.operationLogs] }));
+  },
+
+  getOperationLogs: () => {
+    return get().operationLogs;
+  },
+
+  getOperationLogsByAppId: (appId) => {
+    return get().operationLogs.filter((log) => log.applicationId === appId);
   },
 }));

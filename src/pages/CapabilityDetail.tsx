@@ -146,13 +146,23 @@ export default function CapabilityDetail() {
           
           <div className="mt-6 flex items-center gap-3">
             {existingApproval ? (
-              <span className={`px-4 py-2 rounded-lg font-medium ${
-                existingApproval.status === 'approved' ? 'bg-success-100 text-success-700' :
-                existingApproval.status === 'pending' ? 'bg-warning-100 text-warning-700' : 'bg-danger-100 text-danger-700'
-              }`}>
-                {existingApproval.status === 'approved' ? '已开通' :
-                 existingApproval.status === 'pending' ? '审批中' : '已拒绝'}
-              </span>
+              <>
+                <span className={`px-4 py-2 rounded-lg font-medium ${
+                  existingApproval.status === 'approved' ? 'bg-success-100 text-success-700' :
+                  existingApproval.status === 'pending' ? 'bg-warning-100 text-warning-700' : 'bg-danger-100 text-danger-700'
+                }`}>
+                  {existingApproval.status === 'approved' ? '已开通' :
+                   existingApproval.status === 'pending' ? '审批中' : '已拒绝'}
+                </span>
+                {existingApproval.status === 'rejected' && (
+                  <button
+                    onClick={() => setShowApplyModal(true)}
+                    className="btn-primary flex items-center gap-2"
+                  >
+                    重新申请
+                  </button>
+                )}
+              </>
             ) : (
               <>
                 <button
