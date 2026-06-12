@@ -52,6 +52,46 @@ export default function AdminDashboard() {
     unit: '次',
   });
 
+  const [logFilters, setLogFilters] = useState({
+    appId: '',
+    operationType: '',
+    userId: '',
+    timeRange: '7d',
+  });
+  const [selectedLog, setSelectedLog] = useState<ReturnType<typeof getOperationLogs>[0] | null>(null);
+  const [showLogDetailModal, setShowLogDetailModal] = useState(false);
+
+  const filteredLogs = getOperationLogs().filter(log => {
+    if (logFilters.appId && log.applicationId !== logFilters.appId) return false;
+    if (logFilters.operationType && log.operation !== logFilters.operationType) return false;
+    if (logFilters.userId && log.userId !== logFilters.userId) return false;
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      if (!log.applicationName.toLowerCase().includes(query) && 
+          !log.userName.toLowerCase().includes(query) && 
+          !log.detail.toLowerCase().includes(query)) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const getOperationTypeOptions = [
+    { value: '', label: '全部类型' },
+    { value: 'create_app', label: '创建应用' },
+    { value: 'update_quota', label: '更新额度' },
+    { value: 'add_whitelist', label: '添加白名单' },
+    { value: 'remove_whitelist', label: '删除白名单' },
+    { value: 'create_credential', label: '创建凭证' },
+    { value: 'rotate_credential', label: '轮换密钥' },
+    { value: 'delete_credential', label: '删除凭证' },
+  ];
+
+  const handleViewLogDetail = (log: ReturnType<typeof getOperationLogs>[0]) => {
+    setSelectedLog(log);
+    setShowLogDetailModal(true);
+  };
+
   const handleCreateCapability = () => {
     if (!newCapability.name || !newCapability.description) return;
     addCapability({
@@ -375,23 +415,51 @@ export default function AdminDashboard() {
 
         {activeTab === 'logs' && (
           <div>
-            <div className="flex items-center justify-between mb-6">
-              <div className="relative">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="搜索应用..."
-                  className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-                />
+            <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="relative">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="搜索应用/操作人/详情..."
+                    className="pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 w-48"
+                  />
+                </div>
+                <select
+                  value={logFilters.appId}
+                  onChange={(e) => setLogFilters({ ...logFilters, appId: e.target.value })}
+                  className="input-field w-40"
+                >
+                  <option value="">全部应用</option>
+                  {applications.map(app => (
+                    <option key={app.id} value={app.id}>{app.name}</option>
+                  ))}
+                </select>
+                <select
+                  value={logFilters.operationType}
+                  onChange={(e) => setLogFilters({ ...logFilters, operationType: e.target.value })}
+                  className="input-field w-36"
+                >
+                  {getOperationTypeOptions.map(opt => (
+                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+                <select
+                  value={logFilters.userId}
+                  onChange={(e) => setLogFilters({ ...logFilters, userId: e.target.value })}
+                  className="input-field w-36"
+                >
+                  <option value="">全部操作人</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>{user.name}</option>
+                  ))}
+                </select>
               </div>
-              <select className="input-field w-40">
-                <option value="">全部应用</option>
-                {applications.map(app => (
-                  <option key={app.id} value={app.id}>{app.name}</option>
-                ))}
-              </select>
+              <div className="text-sm text-gray-500">
+                共 {filteredLogs.length} 条记录
+              </div>
             </div>
 
             <div className="card">
@@ -404,15 +472,16 @@ export default function AdminDashboard() {
                       <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">操作人</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">操作类型</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">详情</th>
+                      <th className="text-left py-3 px-4 text-sm font-medium text-gray-500">操作</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {getOperationLogs().length === 0 ? (
+                    {filteredLogs.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="py-8 text-center text-gray-500">暂无操作日志</td>
+                        <td colSpan={6} className="py-8 text-center text-gray-500">暂无符合条件的记录</td>
                       </tr>
                     ) : (
-                      getOperationLogs().map((log) => (
+                      filteredLogs.map((log) => (
                         <tr key={log.id} className="border-b border-gray-50 hover:bg-gray-50">
                           <td className="py-3 px-4 text-sm text-gray-500">{formatDate(log.createdAt)}</td>
                           <td className="py-3 px-4 text-sm font-medium text-gray-800">{log.applicationName}</td>
@@ -422,7 +491,15 @@ export default function AdminDashboard() {
                               {log.operationName}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-sm text-gray-600">{log.detail}</td>
+                          <td className="py-3 px-4 text-sm text-gray-600 max-w-xs truncate">{log.detail}</td>
+                          <td className="py-3 px-4">
+                            <button
+                              onClick={() => handleViewLogDetail(log)}
+                              className="text-sm text-primary-600 hover:text-primary-700"
+                            >
+                              查看详情
+                            </button>
+                          </td>
                         </tr>
                       ))
                     )}
@@ -545,6 +622,78 @@ export default function AdminDashboard() {
         message={`确定要删除此${deleteType === 'capability' ? '能力' : '用户'}吗？删除后将无法恢复。`}
         danger
       />
+
+      <Modal isOpen={showLogDetailModal} onClose={() => setShowLogDetailModal(false)} title="操作详情" size="lg">
+        {selectedLog && (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-sm text-gray-500 mb-1">操作时间</p>
+                <p className="font-medium text-gray-800">{formatDate(selectedLog.createdAt)}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 mb-1">操作人</p>
+                <p className="font-medium text-gray-800">{selectedLog.userName}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 mb-1">所属应用</p>
+                <p className="font-medium text-gray-800">{selectedLog.applicationName}</p>
+              </div>
+              <div>
+                <p className="text-sm text-gray-500 mb-1">操作类型</p>
+                <span className="inline-flex text-xs px-2 py-1 bg-primary-100 text-primary-700 rounded">
+                  {selectedLog.operationName}
+                </span>
+              </div>
+            </div>
+            
+            <div>
+              <p className="text-sm text-gray-500 mb-2">操作详情</p>
+              <div className="p-4 bg-gray-50 rounded-lg">
+                <p className="text-gray-800">{selectedLog.detail}</p>
+              </div>
+            </div>
+            
+            <div>
+              <p className="text-sm text-gray-500 mb-2">变更前后对比</p>
+              <div className="border border-gray-200 rounded-lg overflow-hidden">
+                <div className="grid grid-cols-2">
+                  <div className="p-4 bg-gray-50 border-r border-gray-200">
+                    <p className="text-xs text-gray-500 mb-2">变更前</p>
+                    <p className="text-sm text-gray-600">
+                      {selectedLog.operation === 'create_app' && '无'}
+                      {selectedLog.operation === 'update_quota' && selectedLog.detail.includes('从') ? selectedLog.detail.split('从')[1].split('调')[0] : '—'}
+                      {selectedLog.operation === 'add_whitelist' && '无此IP'}
+                      {selectedLog.operation === 'remove_whitelist' && selectedLog.detail.includes('删除IP地址:') ? selectedLog.detail.split('删除IP地址:')[1] : '—'}
+                      {selectedLog.operation === 'create_credential' && '无此凭证'}
+                      {selectedLog.operation === 'rotate_credential' && '旧密钥'}
+                      {selectedLog.operation === 'delete_credential' && '凭证存在'}
+                    </p>
+                  </div>
+                  <div className="p-4 bg-success-50">
+                    <p className="text-xs text-success-600 mb-2">变更后</p>
+                    <p className="text-sm text-gray-800">
+                      {selectedLog.operation === 'create_app' && selectedLog.detail.replace('创建应用 "', '').replace('"', '')}
+                      {selectedLog.operation === 'update_quota' && selectedLog.detail.includes('调整为') ? selectedLog.detail.split('调整为')[1] : selectedLog.detail}
+                      {selectedLog.operation === 'add_whitelist' && selectedLog.detail.includes('添加IP地址:') ? selectedLog.detail.split('添加IP地址:')[1] : '—'}
+                      {selectedLog.operation === 'remove_whitelist' && '已删除'}
+                      {selectedLog.operation === 'create_credential' && selectedLog.detail.replace('创建凭证 "', '').replace('"', '')}
+                      {selectedLog.operation === 'rotate_credential' && '新密钥已生成'}
+                      {selectedLog.operation === 'delete_credential' && '凭证已删除'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+              <button onClick={() => setShowLogDetailModal(false)} className="btn-secondary">
+                关闭
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

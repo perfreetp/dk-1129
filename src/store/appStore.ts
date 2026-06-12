@@ -31,7 +31,7 @@ interface AppStore {
   updateCapability: (id: string, updates: Partial<Capability>) => void;
   deleteCapability: (id: string) => void;
 
-  addApplication: (app: Omit<Application, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  addApplication: (app: Omit<Application, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateApplication: (id: string, updates: Partial<Application>) => void;
   deleteApplication: (id: string) => void;
 
@@ -147,15 +147,17 @@ export const useAppStore = create<AppStore>((set, get) => ({
   },
 
   addApplication: (app) => {
+    const newAppId = Date.now().toString();
     const newApp: Application = {
       ...app,
-      id: Date.now().toString(),
+      id: newAppId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       quotaUsed: 0,
       whitelist: [],
     };
     set((state) => ({ applications: [...state.applications, newApp] }));
+    return newAppId;
   },
 
   updateApplication: (id, updates) => {

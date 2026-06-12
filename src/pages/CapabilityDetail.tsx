@@ -28,13 +28,15 @@ const tabs = [
 export default function CapabilityDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getCapabilityById, applications, submitApproval, currentUser, getApprovalsByUserId, getRatingsByCapabilityId, addRating } = useAppStore();
+  const { getCapabilityById, applications, submitApproval, currentUser, getApprovalsByUserId, getRatingsByCapabilityId, addRating, approvals } = useAppStore();
   
   const capability = getCapabilityById(id || '');
   const [activeTab, setActiveTab] = useState('overview');
   const [isFavorite, setIsFavorite] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
+  const [showExistingModal, setShowExistingModal] = useState(false);
+  const [existingApprovalInfo, setExistingApprovalInfo] = useState<{appName: string; status: string} | null>(null);
   const [selectedApp, setSelectedApp] = useState('');
   const [applyReason, setApplyReason] = useState('');
   const [newRating, setNewRating] = useState(0);
@@ -45,8 +47,33 @@ export default function CapabilityDetail() {
   const existingApproval = userApprovals.find(a => a.capabilityId === id);
   const capabilityRatings = getRatingsByCapabilityId(id || '');
 
+  const checkExistingApproval = (appId: string) => {
+    const existing = approvals.find(a => a.applicationId === appId && a.capabilityId === id);
+    if (existing) {
+      setExistingApprovalInfo({ appName: existing.applicationName, status: existing.status });
+      setShowExistingModal(true);
+      return true;
+    }
+    return false;
+  };
+
+  const handleAppChange = (appId: string) => {
+    setSelectedApp(appId);
+    if (appId && checkExistingApproval(appId)) {
+      return;
+    }
+  };
+
   const handleSubmitApply = () => {
     if (!selectedApp || !applyReason) return;
+    
+    const existing = approvals.find(a => a.applicationId === selectedApp && a.capabilityId === id);
+    if (existing) {
+      setExistingApprovalInfo({ appName: existing.applicationName, status: existing.status });
+      setShowExistingModal(true);
+      return;
+    }
+
     const app = applications.find(a => a.id === selectedApp);
     if (app) {
       submitApproval({
@@ -355,7 +382,7 @@ export default function CapabilityDetail() {
             <label className="block text-sm font-medium text-gray-700 mb-2">选择应用</label>
             <select
               value={selectedApp}
-              onChange={(e) => setSelectedApp(e.target.value)}
+              onChange={(e) => handleAppChange(e.target.value)}
               className="input-field"
             >
               <option value="">请选择应用</option>
@@ -437,6 +464,54 @@ export default function CapabilityDetail() {
               className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               提交评价
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showExistingModal} onClose={() => { setShowExistingModal(false); setExistingApprovalInfo(null); }} title="已有申请记录">
+        <div className="space-y-4">
+          <div className="p-4 bg-warning-50 rounded-lg">
+            <p className="text-warning-800">
+              该应用 <span className="font-semibold">{existingApprovalInfo?.appName}</span> 已提交过此能力的申请
+            </p>
+            <p className="text-warning-700 mt-2">
+              当前状态: 
+              <span className={`ml-2 px-2 py-0.5 rounded text-sm font-medium ${
+                existingApprovalInfo?.status === 'approved' ? 'bg-success-100 text-success-700' :
+                existingApprovalInfo?.status === 'pending' ? 'bg-warning-100 text-warning-700' :
+                'bg-danger-100 text-danger-700'
+              }`}>
+                {existingApprovalInfo?.status === 'approved' ? '已通过' :
+                 existingApprovalInfo?.status === 'pending' ? '审批中' : '已拒绝'}
+              </span>
+            </p>
+          </div>
+          <p className="text-gray-600 text-sm">
+            {existingApprovalInfo?.status === 'pending' && '您的申请正在审批中，请耐心等待。'}
+            {existingApprovalInfo?.status === 'approved' && '您的申请已通过审核，无需重复申请。'}
+            {existingApprovalInfo?.status === 'rejected' && '您的申请已被拒绝，如需重新申请，请前往申请审批页面处理。'}
+          </p>
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+            <button 
+              onClick={() => { 
+                setShowExistingModal(false); 
+                setExistingApprovalInfo(null);
+                navigate('/approvals');
+              }} 
+              className="btn-secondary"
+            >
+              前往审批页面
+            </button>
+            <button 
+              onClick={() => { 
+                setShowExistingModal(false); 
+                setExistingApprovalInfo(null);
+                setShowApplyModal(false);
+              }} 
+              className="btn-primary"
+            >
+              知道了
             </button>
           </div>
         </div>

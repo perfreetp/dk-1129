@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
 import { AlertTriangle, Bell, Download, TrendingUp, TrendingDown, Activity, Clock, Zap, FileText } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
@@ -8,78 +8,103 @@ import Modal from '../components/Modal';
 
 const COLORS = ['#165DFF', '#00B42A', '#FF7D00', '#F53F3F', '#8F5CF6'];
 
-const generateDataForRange = (range: string) => {
-  const baseData = {
+const generateMockData = (appId: string, capabilityId: string, range: string) => {
+  const baseMultiplier = appId ? parseInt(appId) / 10 : 1;
+  const capMultiplier = capabilityId ? parseInt(capabilityId) / 10 : 1;
+  
+  const data = {
     '24h': [
-      { name: '00:00', calls: 50, success: 48, fail: 2 },
-      { name: '04:00', calls: 30, success: 29, fail: 1 },
-      { name: '08:00', calls: 120, success: 115, fail: 5 },
-      { name: '12:00', calls: 200, success: 195, fail: 5 },
-      { name: '16:00', calls: 180, success: 175, fail: 5 },
-      { name: '20:00', calls: 100, success: 98, fail: 2 },
+      { name: '00:00', calls: Math.floor(50 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
+      { name: '04:00', calls: Math.floor(30 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
+      { name: '08:00', calls: Math.floor(120 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
+      { name: '12:00', calls: Math.floor(200 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
+      { name: '16:00', calls: Math.floor(180 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
+      { name: '20:00', calls: Math.floor(100 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
     ],
     '7d': [
-      { name: '周一', calls: 1200, success: 1180, fail: 20 },
-      { name: '周二', calls: 1500, success: 1470, fail: 30 },
-      { name: '周三', calls: 1800, success: 1760, fail: 40 },
-      { name: '周四', calls: 1300, success: 1270, fail: 30 },
-      { name: '周五', calls: 1600, success: 1580, fail: 20 },
-      { name: '周六', calls: 800, success: 790, fail: 10 },
-      { name: '周日', calls: 600, success: 595, fail: 5 },
+      { name: '周一', calls: Math.floor(1200 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
+      { name: '周二', calls: Math.floor(1500 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
+      { name: '周三', calls: Math.floor(1800 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
+      { name: '周四', calls: Math.floor(1300 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
+      { name: '周五', calls: Math.floor(1600 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
+      { name: '周六', calls: Math.floor(800 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
+      { name: '周日', calls: Math.floor(600 * baseMultiplier * capMultiplier), success: 0, fail: 0 },
     ],
     '30d': Array.from({ length: 30 }, (_, i) => ({
       name: `${i + 1}日`,
-      calls: Math.floor(Math.random() * 500) + 800,
-      success: Math.floor(Math.random() * 480) + 780,
-      fail: Math.floor(Math.random() * 30) + 5,
+      calls: Math.floor((Math.random() * 500 + 800) * baseMultiplier * capMultiplier),
+      success: 0,
+      fail: 0,
     })),
     '90d': Array.from({ length: 12 }, (_, i) => ({
       name: `第${i + 1}周`,
-      calls: Math.floor(Math.random() * 2000) + 5000,
-      success: Math.floor(Math.random() * 1900) + 4900,
-      fail: Math.floor(Math.random() * 100) + 20,
+      calls: Math.floor((Math.random() * 2000 + 5000) * baseMultiplier * capMultiplier),
+      success: 0,
+      fail: 0,
     })),
   };
-  return baseData[range as keyof typeof baseData] || baseData['7d'];
+  
+  return (data[range as keyof typeof data] || data['7d']).map(item => ({
+    ...item,
+    success: Math.floor(item.calls * (0.92 + Math.random() * 0.06)),
+    fail: item.calls - Math.floor(item.calls * (0.92 + Math.random() * 0.06)),
+  }));
 };
 
-const errorDistribution = [
-  { name: '参数错误', value: 35 },
-  { name: '权限不足', value: 25 },
-  { name: '服务异常', value: 20 },
-  { name: '超时', value: 15 },
-  { name: '其他', value: 5 },
-];
-
-const mockAlerts = [
-  { id: '1', type: 'warning', title: '调用量异常', message: '短信服务调用量突增50%', time: '10分钟前', status: 'active' },
-  { id: '2', type: 'error', title: '成功率下降', message: '地图服务成功率降至85%', time: '30分钟前', status: 'active' },
-  { id: '3', type: 'info', title: '额度预警', message: '您的短信服务额度已使用80%', time: '1小时前', status: 'resolved' },
-];
-
 export default function UsageMonitoring() {
-  const { capabilities } = useAppStore();
+  const { capabilities, applications, currentUser } = useAppStore();
   const [selectedCapability, setSelectedCapability] = useState('all');
+  const [selectedApp, setSelectedApp] = useState('all');
   const [timeRange, setTimeRange] = useState('7d');
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [alertConfig, setAlertConfig] = useState({ threshold: 90, enabled: true });
   const [exportHistory, setExportHistory] = useState<Array<{
     id: string;
     capability: string;
+    app: string;
     timeRange: string;
     date: string;
     fileName: string;
+    filters: { app: string; capability: string; timeRange: string };
   }>>([]);
 
-  const usageData = useMemo(() => generateDataForRange(timeRange), [timeRange]);
+  const userApps = applications.filter(app => app.userId === currentUser.id);
+
+  const usageData = useMemo(() => 
+    generateMockData(selectedApp, selectedCapability, timeRange), 
+    [selectedApp, selectedCapability, timeRange]
+  );
 
   const totalCalls = useMemo(() => usageData.reduce((sum, item) => sum + item.calls, 0), [usageData]);
   const totalSuccess = useMemo(() => usageData.reduce((sum, item) => sum + item.success, 0), [usageData]);
-  const successRate = useMemo(() => ((totalSuccess / totalCalls) * 100).toFixed(1), [totalSuccess, totalCalls]);
+  const successRate = useMemo(() => totalCalls > 0 ? ((totalSuccess / totalCalls) * 100).toFixed(1) : '0.0', [totalSuccess, totalCalls]);
+
+  const errorDistribution = useMemo(() => {
+    const totalErrors = totalCalls - totalSuccess;
+    if (totalErrors === 0) return [
+      { name: '参数错误', value: 0 },
+      { name: '权限不足', value: 0 },
+      { name: '服务异常', value: 0 },
+      { name: '超时', value: 0 },
+      { name: '其他', value: 0 },
+    ];
+    return [
+      { name: '参数错误', value: Math.floor(totalErrors * 0.35) },
+      { name: '权限不足', value: Math.floor(totalErrors * 0.25) },
+      { name: '服务异常', value: Math.floor(totalErrors * 0.20) },
+      { name: '超时', value: Math.floor(totalErrors * 0.15) },
+      { name: '其他', value: totalErrors - Math.floor(totalErrors * 0.95) },
+    ];
+  }, [totalCalls, totalSuccess]);
 
   const capabilityOptions = [
     { value: 'all', label: '全部能力' },
     ...capabilities.map(c => ({ value: c.id, label: c.name })),
+  ];
+
+  const appOptions = [
+    { value: 'all', label: '全部应用' },
+    ...userApps.map(a => ({ value: a.id, label: a.name })),
   ];
 
   const timeRangeOptions = [
@@ -89,10 +114,20 @@ export default function UsageMonitoring() {
     { value: '90d', label: '90天' },
   ];
 
-  const handleExportReport = () => {
-    const selectedCap = selectedCapability === 'all' 
-      ? '全部能力' 
-      : capabilities.find(c => c.id === selectedCapability)?.name || '未知';
+  const getFilterLabel = (type: 'capability' | 'app' | 'timeRange', value: string) => {
+    if (type === 'capability') {
+      return value === 'all' ? '全部能力' : capabilities.find(c => c.id === value)?.name || '未知';
+    }
+    if (type === 'app') {
+      return value === 'all' ? '全部应用' : userApps.find(a => a.id === value)?.name || '未知';
+    }
+    return timeRangeOptions.find(o => o.value === value)?.label || '';
+  };
+
+  const generateReport = useCallback(() => {
+    const selectedCapName = getFilterLabel('capability', selectedCapability);
+    const selectedAppName = getFilterLabel('app', selectedApp);
+    const selectedRangeName = getFilterLabel('timeRange', timeRange);
     
     const reportData = usageData.map(item => ({
       日期: item.name,
@@ -107,12 +142,19 @@ export default function UsageMonitoring() {
       .map(row => `${row.日期},${row.总调用量},${row.成功调用},${row.失败调用},${row.成功率}`)
       .join('\n');
     
-    const summary = `\n\n汇总统计\n筛选条件: ${selectedCap}\n时间范围: ${timeRangeOptions.find(o => o.value === timeRange)?.label}\n总调用量,总成功,总失败,整体成功率\n${totalCalls},${totalSuccess},${totalCalls - totalSuccess},${successRate}%`;
+    const summary = `\n\n======= 汇总统计 =======\n应用: ${selectedAppName}\n能力: ${selectedCapName}\n时间范围: ${selectedRangeName}\n总调用量: ${totalCalls}\n成功调用: ${totalSuccess}\n失败调用: ${totalCalls - totalSuccess}\n整体成功率: ${successRate}%`;
 
-    const errorSummary = `\n\n错误原因分布\n错误类型,次数\n${errorDistribution.map(e => `${e.name},${e.value}`).join('\n')}`;
+    const errorSummary = `\n\n======= 错误分布 =======\n错误类型,次数,占比\n${errorDistribution.map(e => `${e.name},${e.value},${totalCalls > 0 ? ((e.value / (totalCalls - totalSuccess)) * 100).toFixed(1) : 0}%`).join('\n')}`;
 
-    const fullReport = csvHeader + csvContent + summary + errorSummary;
-    const fileName = `用量报表_${selectedCap}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.csv`;
+    return csvHeader + csvContent + summary + errorSummary;
+  }, [selectedCapability, selectedApp, timeRange, usageData, totalCalls, totalSuccess, successRate, errorDistribution, capabilities, userApps]);
+
+  const handleExportReport = useCallback(() => {
+    const selectedCapName = getFilterLabel('capability', selectedCapability);
+    const selectedAppName = getFilterLabel('app', selectedApp);
+    const fileName = `用量报表_${selectedAppName}_${selectedCapName}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.csv`;
+    
+    const fullReport = generateReport();
     
     const blob = new Blob(['\ufeff' + fullReport], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
@@ -125,14 +167,49 @@ export default function UsageMonitoring() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
+    const filters = { app: selectedApp, capability: selectedCapability, timeRange };
     setExportHistory(prev => [{
       id: Date.now().toString(),
-      capability: selectedCap,
+      capability: selectedCapName,
+      app: selectedAppName,
       timeRange: timeRangeOptions.find(o => o.value === timeRange)?.label || '',
       date: new Date().toLocaleString('zh-CN'),
       fileName,
+      filters,
     }, ...prev].slice(0, 10));
-  };
+  }, [selectedCapability, selectedApp, timeRange, generateReport, getFilterLabel, timeRangeOptions]);
+
+  const handleReDownload = useCallback((record: typeof exportHistory[0]) => {
+    const originalCapability = record.filters.capability;
+    const originalApp = record.filters.app;
+    const originalTimeRange = record.filters.timeRange;
+    
+    const currentCapability = selectedCapability;
+    const currentApp = selectedApp;
+    const currentTimeRange = timeRange;
+
+    setSelectedCapability(originalCapability);
+    setSelectedApp(originalApp);
+    setTimeRange(originalTimeRange);
+
+    setTimeout(() => {
+      const fullReport = generateReport();
+      const blob = new Blob(['\ufeff' + fullReport], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', record.fileName);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      setSelectedCapability(currentCapability);
+      setSelectedApp(currentApp);
+      setTimeRange(currentTimeRange);
+    }, 100);
+  }, [selectedCapability, selectedApp, timeRange, generateReport]);
 
   return (
     <div className="flex-1 flex flex-col overflow-auto">
@@ -142,9 +219,18 @@ export default function UsageMonitoring() {
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
             <select
+              value={selectedApp}
+              onChange={(e) => setSelectedApp(e.target.value)}
+              className="input-field w-40"
+            >
+              {appOptions.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+            <select
               value={selectedCapability}
               onChange={(e) => setSelectedCapability(e.target.value)}
-              className="input-field w-48"
+              className="input-field w-40"
             >
               {capabilityOptions.map(option => (
                 <option key={option.value} value={option.value}>{option.label}</option>
@@ -160,7 +246,7 @@ export default function UsageMonitoring() {
               ))}
             </select>
           </div>
-          <button onClick={handleExportReport} className="btn-secondary flex items-center gap-2">
+          <button onClick={handleExportReport} className="btn-primary flex items-center gap-2">
             <Download className="w-4 h-4" />
             导出报表
           </button>
@@ -203,7 +289,7 @@ export default function UsageMonitoring() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">错误数</p>
-                <p className="text-2xl font-bold text-gray-800">{usageData.reduce((sum, item) => sum + item.fail, 0)}</p>
+                <p className="text-2xl font-bold text-gray-800">{totalCalls - totalSuccess}</p>
                 <p className="text-xs text-danger-600 flex items-center gap-1 mt-1">
                   <TrendingDown className="w-3 h-3" />
                   -18% 较上期
@@ -259,7 +345,7 @@ export default function UsageMonitoring() {
                 <Tooltip formatter={(value: number) => [`${value}%`, '成功率']} />
                 <Line 
                   type="monotone" 
-                  dataKey={(item) => ((item.success / item.calls) * 100).toFixed(1)} 
+                  dataKey={(item) => item.calls > 0 ? ((item.success / item.calls) * 100).toFixed(1) : '0'} 
                   name="成功率" 
                   stroke="#00B42A" 
                   strokeWidth={2}
@@ -294,69 +380,34 @@ export default function UsageMonitoring() {
           </div>
           
           <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-800">告警通知</h3>
-              <button
-                onClick={() => setShowAlertModal(true)}
-                className="btn-secondary flex items-center gap-2 text-sm"
-              >
-                <Bell className="w-4 h-4" />
-                配置告警
-              </button>
-            </div>
-            <div className="space-y-3">
-              {mockAlerts.map((alert) => (
-                <div 
-                  key={alert.id} 
-                  className={`p-4 rounded-lg border-l-4 ${
-                    alert.type === 'error' ? 'bg-danger-50 border-danger-500' :
-                    alert.type === 'warning' ? 'bg-warning-50 border-warning-500' :
-                    'bg-info-50 border-info-500'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="font-medium text-gray-800">{alert.title}</h4>
-                      <p className="text-sm text-gray-600">{alert.message}</p>
+            <h3 className="text-lg font-semibold text-gray-800 mb-4">最近导出记录</h3>
+            {exportHistory.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">暂无导出记录</p>
+            ) : (
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {exportHistory.map((record) => (
+                  <div key={record.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <FileText className="w-5 h-5 text-gray-400" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">{record.fileName}</p>
+                        <p className="text-xs text-gray-500">
+                          应用: {record.app} | 能力: {record.capability} | {record.timeRange} | {record.date}
+                        </p>
+                      </div>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded ${
-                      alert.status === 'active' ? 'bg-danger-100 text-danger-700' :
-                      'bg-success-100 text-success-700'
-                    }`}>
-                      {alert.status === 'active' ? '待处理' : '已解决'}
-                    </span>
+                    <button 
+                      onClick={() => handleReDownload(record)}
+                      className="text-sm text-primary-600 hover:text-primary-700 flex items-center gap-1"
+                    >
+                      <Download className="w-4 h-4" />
+                      重新下载
+                    </button>
                   </div>
-                  <p className="text-xs text-gray-400 mt-2">{alert.time}</p>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
-        </div>
-
-        <div className="card">
-          <h3 className="text-lg font-semibold text-gray-800 mb-4">最近导出记录</h3>
-          {exportHistory.length === 0 ? (
-            <p className="text-gray-500 text-center py-8">暂无导出记录</p>
-          ) : (
-            <div className="space-y-3">
-              {exportHistory.map((record) => (
-                <div key={record.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <FileText className="w-5 h-5 text-gray-400" />
-                    <div>
-                      <p className="text-sm font-medium text-gray-800">{record.fileName}</p>
-                      <p className="text-xs text-gray-500">
-                        能力: {record.capability} | 时间范围: {record.timeRange} | {record.date}
-                      </p>
-                    </div>
-                  </div>
-                  <button className="text-sm text-primary-600 hover:text-primary-700">
-                    重新下载
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </main>
 
@@ -395,24 +446,6 @@ export default function UsageMonitoring() {
               <span>0%</span>
               <span className="font-medium text-gray-800">{alertConfig.threshold}%</span>
               <span>100%</span>
-            </div>
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">通知方式</label>
-            <div className="space-y-2">
-              <label className="flex items-center gap-2">
-                <input type="checkbox" defaultChecked className="w-4 h-4 text-primary-600" />
-                <span className="text-sm text-gray-700">邮件通知</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" defaultChecked className="w-4 h-4 text-primary-600" />
-                <span className="text-sm text-gray-700">短信通知</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="checkbox" className="w-4 h-4 text-primary-600" />
-                <span className="text-sm text-gray-700">企业微信通知</span>
-              </label>
             </div>
           </div>
           

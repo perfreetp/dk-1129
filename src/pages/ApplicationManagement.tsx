@@ -27,8 +27,7 @@ export default function ApplicationManagement() {
 
   const handleCreate = () => {
     if (!formData.name.trim()) return;
-    const appId = Date.now().toString();
-    addApplication({
+    const newAppId = addApplication({
       name: formData.name,
       description: formData.description,
       status: 'active',
@@ -41,7 +40,7 @@ export default function ApplicationManagement() {
     addOperationLog({
       userId: currentUser.id,
       userName: currentUser.name,
-      applicationId: appId,
+      applicationId: newAppId,
       applicationName: formData.name,
       operation: 'create_app',
       operationName: '创建应用',

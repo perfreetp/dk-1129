@@ -11,7 +11,7 @@ import EmptyState from '../components/EmptyState';
 export default function CredentialManagement() {
   const { appId } = useParams<{ appId: string }>();
   const navigate = useNavigate();
-  const { applications, credentials, addCredential, rotateCredential, deleteCredential } = useAppStore();
+  const { applications, credentials, addCredential, rotateCredential, deleteCredential, addOperationLog, currentUser } = useAppStore();
   
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showRotateModal, setShowRotateModal] = useState(false);
@@ -32,13 +32,32 @@ export default function CredentialManagement() {
       applicationId: appId,
       applicationName: app?.name || '',
     });
+    addOperationLog({
+      userId: currentUser.id,
+      userName: currentUser.name,
+      applicationId: appId,
+      applicationName: app?.name || '',
+      operation: 'create_credential',
+      operationName: '创建凭证',
+      detail: `创建凭证 "${credentialName}"`,
+    });
     setShowCreateModal(false);
     setCredentialName('');
   };
 
   const handleRotate = () => {
     if (rotateCredId) {
+      const cred = credentials.find(c => c.id === rotateCredId);
       rotateCredential(rotateCredId);
+      addOperationLog({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        applicationId: cred?.applicationId || '',
+        applicationName: cred?.applicationName || '',
+        operation: 'rotate_credential',
+        operationName: '轮换密钥',
+        detail: `轮换凭证 "${cred?.name}" 的密钥`,
+      });
       setShowRotateModal(false);
       setRotateCredId('');
     }
@@ -46,7 +65,17 @@ export default function CredentialManagement() {
 
   const handleDelete = () => {
     if (deleteCredId) {
+      const cred = credentials.find(c => c.id === deleteCredId);
       deleteCredential(deleteCredId);
+      addOperationLog({
+        userId: currentUser.id,
+        userName: currentUser.name,
+        applicationId: cred?.applicationId || '',
+        applicationName: cred?.applicationName || '',
+        operation: 'delete_credential',
+        operationName: '删除凭证',
+        detail: `删除凭证 "${cred?.name}"`,
+      });
       setShowDeleteDialog(false);
       setDeleteCredId('');
     }
