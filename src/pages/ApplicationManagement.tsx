@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Edit, Trash2, Key, Settings, Globe, ChevronRight, Clock, Package } from 'lucide-react';
+import { Plus, Edit, Trash2, Key, Settings, Globe, ChevronRight, Clock, Package, X, PlusCircle } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { formatDate, getStatusBadge, calculatePercentage } from '../utils/helpers';
 import Header from '../components/Header';
@@ -10,14 +10,20 @@ import EmptyState from '../components/EmptyState';
 
 export default function ApplicationManagement() {
   const navigate = useNavigate();
-  const { applications, addApplication, deleteApplication, currentUser, getCredentialsByAppId } = useAppStore();
+  const { applications, addApplication, deleteApplication, updateApplication, currentUser, getCredentialsByAppId, addWhitelist, removeWhitelist } = useAppStore();
   
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showQuotaModal, setShowQuotaModal] = useState(false);
+  const [showWhitelistModal, setShowWhitelistModal] = useState(false);
+  const [editAppId, setEditAppId] = useState('');
+  const [editQuota, setEditQuota] = useState(0);
   const [deleteAppId, setDeleteAppId] = useState('');
+  const [newWhitelistIP, setNewWhitelistIP] = useState('');
   const [formData, setFormData] = useState({ name: '', description: '' });
 
   const userApps = applications.filter(app => app.userId === currentUser.id);
+  const editApp = applications.find(app => app.id === editAppId);
 
   const handleCreate = () => {
     if (!formData.name.trim()) return;
@@ -43,13 +49,46 @@ export default function ApplicationManagement() {
     }
   };
 
+  const openQuotaModal = (appId: string) => {
+    const app = applications.find(a => a.id === appId);
+    if (app) {
+      setEditAppId(appId);
+      setEditQuota(app.quota);
+      setShowQuotaModal(true);
+    }
+  };
+
+  const handleUpdateQuota = () => {
+    if (editAppId && editQuota > 0) {
+      updateApplication(editAppId, { quota: editQuota });
+      setShowQuotaModal(false);
+      setEditAppId('');
+    }
+  };
+
+  const openWhitelistModal = (appId: string) => {
+    setEditAppId(appId);
+    setShowWhitelistModal(true);
+  };
+
+  const handleAddWhitelist = () => {
+    if (editAppId && newWhitelistIP.trim()) {
+      addWhitelist(editAppId, newWhitelistIP.trim());
+      setNewWhitelistIP('');
+    }
+  };
+
+  const handleRemoveWhitelist = (appId: string, ip: string) => {
+    removeWhitelist(appId, ip);
+  };
+
   const getActionButtons = (appId: string) => {
     const credCount = getCredentialsByAppId(appId).length;
     
     return [
       { icon: Key, label: '调用凭证', path: `/applications/${appId}/credentials`, count: credCount },
-      { icon: Settings, label: '额度配置', path: `/applications/${appId}/quota` },
-      { icon: Globe, label: '白名单', path: `/applications/${appId}/whitelist` },
+      { icon: Settings, label: '额度配置', action: () => openQuotaModal(appId) },
+      { icon: Globe, label: '白名单', action: () => openWhitelistModal(appId) },
     ];
   };
 
@@ -171,7 +210,7 @@ export default function ApplicationManagement() {
                         return (
                           <button
                             key={action.label}
-                            onClick={() => navigate(action.path)}
+                            onClick={action.path ? () => navigate(action.path) : action.action}
                             className="flex items-center gap-2 text-sm text-gray-600 hover:text-primary-600 hover:bg-primary-50 px-3 py-2 rounded-lg transition-all"
                           >
                             <Icon className="w-4 h-4" />
@@ -247,6 +286,84 @@ export default function ApplicationManagement() {
         message="确定要删除此应用吗？删除后将无法恢复，相关的调用凭证也将被删除。"
         danger
       />
+
+      <Modal isOpen={showQuotaModal} onClose={() => setShowQuotaModal(false)} title="额度配置">
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            当前应用: <span className="font-medium">{editApp?.name}</span>
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">额度上限</label>
+            <input
+              type="number"
+              value={editQuota}
+              onChange={(e) => setEditQuota(Number(e.target.value))}
+              min={0}
+              className="input-field"
+            />
+            <p className="text-xs text-gray-500 mt-2">
+              当前已使用: {editApp?.quotaUsed.toLocaleString()} ({calculatePercentage(editApp?.quotaUsed || 0, editQuota)}%)
+            </p>
+          </div>
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+            <button onClick={() => setShowQuotaModal(false)} className="btn-secondary">
+              取消
+            </button>
+            <button onClick={handleUpdateQuota} className="btn-primary">
+              保存配置
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showWhitelistModal} onClose={() => setShowWhitelistModal(false)} title="白名单管理" size="lg">
+        <div className="space-y-4">
+          <p className="text-gray-600">
+            当前应用: <span className="font-medium">{editApp?.name}</span>
+          </p>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">添加IP地址</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newWhitelistIP}
+                onChange={(e) => setNewWhitelistIP(e.target.value)}
+                placeholder="例如: 192.168.1.0/24"
+                className="input-field flex-1"
+              />
+              <button onClick={handleAddWhitelist} className="btn-primary flex items-center gap-2">
+                <PlusCircle className="w-4 h-4" />
+                添加
+              </button>
+            </div>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">已配置的白名单</label>
+            <div className="space-y-2 max-h-60 overflow-y-auto">
+              {editApp?.whitelist.length === 0 ? (
+                <p className="text-gray-400 text-sm py-4 text-center">暂无白名单配置</p>
+              ) : (
+                editApp?.whitelist.map((ip) => (
+                  <div key={ip} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <span className="font-mono text-sm">{ip}</span>
+                    <button
+                      onClick={() => handleRemoveWhitelist(editAppId, ip)}
+                      className="text-danger-500 hover:text-danger-700"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+            <button onClick={() => setShowWhitelistModal(false)} className="btn-primary">
+              完成
+            </button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }

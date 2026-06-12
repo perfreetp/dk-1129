@@ -1,6 +1,6 @@
 import { create } from 'zustand';
-import { Capability, Application, Credential, Approval, Notification, User, AlertRule } from '../types';
-import { mockCapabilities, mockApplications, mockCredentials, mockApprovals, mockNotifications, mockUsers, mockAlertRules } from '../data/mockData';
+import { Capability, Application, Credential, Approval, Notification, User, AlertRule, Rating } from '../types';
+import { mockCapabilities, mockApplications, mockCredentials, mockApprovals, mockNotifications, mockUsers, mockAlertRules, mockRatings } from '../data/mockData';
 
 interface AppStore {
   capabilities: Capability[];
@@ -10,6 +10,7 @@ interface AppStore {
   notifications: Notification[];
   users: User[];
   alertRules: AlertRule[];
+  ratings: Rating[];
   currentUser: User;
   selectedDomain: string;
   searchKeyword: string;
@@ -56,6 +57,10 @@ interface AppStore {
   updateQuota: (appId: string, quota: number) => void;
   addWhitelist: (appId: string, ip: string) => void;
   removeWhitelist: (appId: string, ip: string) => void;
+
+  addRating: (rating: Omit<Rating, 'id' | 'createdAt'>) => void;
+  getRatingsByCapabilityId: (capabilityId: string) => Rating[];
+  updateCapabilityRating: (capabilityId: string) => void;
 }
 
 export const useAppStore = create<AppStore>((set, get) => ({
@@ -66,6 +71,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   notifications: mockNotifications,
   users: mockUsers,
   alertRules: mockAlertRules,
+  ratings: mockRatings,
   currentUser: mockUsers[0],
   selectedDomain: '全部',
   searchKeyword: '',
@@ -219,6 +225,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
               approverId: get().currentUser.id,
               approverName: get().currentUser.name,
               comment,
+              processedAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             }
           : appr
@@ -236,6 +243,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
               approverId: get().currentUser.id,
               approverName: get().currentUser.name,
               comment,
+              processedAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             }
           : appr
@@ -339,6 +347,39 @@ export const useAppStore = create<AppStore>((set, get) => ({
               updatedAt: new Date().toISOString(),
             }
           : app
+      ),
+    }));
+  },
+
+  addRating: (rating) => {
+    const newRating: Rating = {
+      ...rating,
+      id: Date.now().toString(),
+      createdAt: new Date().toISOString(),
+    };
+    set((state) => ({ ratings: [...state.ratings, newRating] }));
+    get().updateCapabilityRating(rating.capabilityId);
+  },
+
+  getRatingsByCapabilityId: (capabilityId) => {
+    return get().ratings.filter((r) => r.capabilityId === capabilityId);
+  },
+
+  updateCapabilityRating: (capabilityId) => {
+    const ratings = get().ratings.filter((r) => r.capabilityId === capabilityId);
+    const avgRating = ratings.length > 0 
+      ? ratings.reduce((sum, r) => sum + r.rating, 0) / ratings.length 
+      : 0;
+    
+    set((state) => ({
+      capabilities: state.capabilities.map((cap) =>
+        cap.id === capabilityId
+          ? {
+              ...cap,
+              rating: Math.round(avgRating * 10) / 10,
+              ratingCount: ratings.length,
+            }
+          : cap
       ),
     }));
   },

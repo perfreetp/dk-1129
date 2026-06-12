@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { CheckCircle2, XCircle, Clock, Eye, RefreshCw, Filter, MessageSquare, Map, Wallet, UserCheck, Mic, Image, Mail, MessageCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Eye, RefreshCw, Filter, MessageSquare, Map, Wallet, UserCheck, Mic, Image, Mail, MessageCircle, Users, ChevronDown } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
 import { formatDate } from '../utils/helpers';
 import Header from '../components/Header';
@@ -26,17 +26,19 @@ const statusConfig = {
 
 export default function ApprovalManagement() {
   const navigate = useNavigate();
-  const { approvals, capabilities, approveApproval, rejectApproval, currentUser } = useAppStore();
+  const { approvals, capabilities, approveApproval, rejectApproval, currentUser, users, setCurrentUser } = useAppStore();
   
   const [filterStatus, setFilterStatus] = useState('all');
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedApproval, setSelectedApproval] = useState<typeof approvals[0] | null>(null);
   const [showActionModal, setShowActionModal] = useState(false);
+  const [showUserSwitcher, setShowUserSwitcher] = useState(false);
   const [actionType, setActionType] = useState<'approve' | 'reject'>('approve');
   const [actionApprovalId, setActionApprovalId] = useState('');
+  const [actionComment, setActionComment] = useState('');
 
   const userApprovals = approvals.filter(a => a.userId === currentUser.id);
-  const isAdmin = currentUser.role === 'admin';
+  const isAdmin = currentUser.role === 'admin' || currentUser.role === 'super_admin';
   const pendingApprovals = isAdmin ? approvals.filter(a => a.status === 'pending') : userApprovals;
 
   const filteredApprovals = filterStatus === 'all' 
@@ -51,17 +53,24 @@ export default function ApprovalManagement() {
   const handleAction = (approvalId: string, type: 'approve' | 'reject') => {
     setActionApprovalId(approvalId);
     setActionType(type);
+    setActionComment('');
     setShowActionModal(true);
   };
 
   const confirmAction = () => {
     if (actionType === 'approve') {
-      approveApproval(actionApprovalId);
+      approveApproval(actionApprovalId, actionComment);
     } else {
-      rejectApproval(actionApprovalId);
+      rejectApproval(actionApprovalId, actionComment);
     }
     setShowActionModal(false);
     setActionApprovalId('');
+    setActionComment('');
+  };
+
+  const switchUser = (user: typeof users[0]) => {
+    setCurrentUser(user);
+    setShowUserSwitcher(false);
   };
 
   const getCapabilityIcon = (capabilityId: string) => {
@@ -95,12 +104,64 @@ export default function ApprovalManagement() {
               </select>
             </div>
           </div>
-          {isAdmin && (
-            <button className="btn-secondary flex items-center gap-2">
-              <RefreshCw className="w-4 h-4" />
-              刷新列表
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <button
+                onClick={() => setShowUserSwitcher(!showUserSwitcher)}
+                className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+              >
+                <Users className="w-4 h-4 text-gray-500" />
+                <span className="text-gray-700">{currentUser.name}</span>
+                <span className={`text-xs px-2 py-0.5 rounded ${
+                  currentUser.role === 'admin' || currentUser.role === 'super_admin'
+                    ? 'bg-primary-100 text-primary-700'
+                    : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {currentUser.role === 'admin' || currentUser.role === 'super_admin' ? '管理员' : '普通用户'}
+                </span>
+                <ChevronDown className="w-4 h-4 text-gray-400" />
+              </button>
+              {showUserSwitcher && (
+                <div className="absolute top-full mt-2 right-0 w-64 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                  <div className="p-2">
+                    <p className="text-xs text-gray-500 px-3 py-2">切换用户身份</p>
+                    {users.map((user) => (
+                      <button
+                        key={user.id}
+                        onClick={() => switchUser(user)}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-colors ${
+                          currentUser.id === user.id
+                            ? 'bg-primary-50 text-primary-700'
+                            : 'hover:bg-gray-50'
+                        }`}
+                      >
+                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-sm font-medium">
+                          {user.name.charAt(0)}
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-800">{user.name}</p>
+                          <p className="text-xs text-gray-500">{user.email}</p>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded ${
+                          user.role === 'admin' || user.role === 'super_admin'
+                            ? 'bg-primary-100 text-primary-700'
+                            : 'bg-gray-100 text-gray-600'
+                        }`}>
+                          {user.role === 'admin' || user.role === 'super_admin' ? '管理员' : '用户'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            {isAdmin && (
+              <button className="btn-secondary flex items-center gap-2">
+                <RefreshCw className="w-4 h-4" />
+                刷新列表
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -275,16 +336,16 @@ export default function ApprovalManagement() {
               : '确定要拒绝此申请吗？请在下方输入拒绝原因。'}
           </p>
           
-          {actionType === 'reject' && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">拒绝原因</label>
-              <textarea
-                rows={3}
-                placeholder="请输入拒绝原因..."
-                className="input-field resize-none"
-              />
-            </div>
-          )}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">审批意见</label>
+            <textarea
+              value={actionComment}
+              onChange={(e) => setActionComment(e.target.value)}
+              rows={3}
+              placeholder="请输入审批意见..."
+              className="input-field resize-none"
+            />
+          </div>
           
           <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
             <button onClick={() => setShowActionModal(false)} className="btn-secondary">

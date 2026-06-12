@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Star, Clock, Zap, ExternalLink, Heart, Share2, MessageSquare, Map, Wallet, UserCheck, Mic, Image, Mail, MessageCircle } from 'lucide-react';
 import { useAppStore } from '../store/appStore';
-import { mockRatings } from '../data/mockData';
 import { formatCurrency, getStatusBadge, formatDate } from '../utils/helpers';
 import Header from '../components/Header';
 import Modal from '../components/Modal';
@@ -29,12 +28,13 @@ const tabs = [
 export default function CapabilityDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getCapabilityById, applications, submitApproval, currentUser, getApprovalsByUserId } = useAppStore();
+  const { getCapabilityById, applications, submitApproval, currentUser, getApprovalsByUserId, getRatingsByCapabilityId, addRating } = useAppStore();
   
   const capability = getCapabilityById(id || '');
   const [activeTab, setActiveTab] = useState('overview');
   const [isFavorite, setIsFavorite] = useState(false);
   const [showApplyModal, setShowApplyModal] = useState(false);
+  const [showRatingModal, setShowRatingModal] = useState(false);
   const [selectedApp, setSelectedApp] = useState('');
   const [applyReason, setApplyReason] = useState('');
   const [newRating, setNewRating] = useState(0);
@@ -43,6 +43,7 @@ export default function CapabilityDetail() {
   const userApps = applications.filter(app => app.userId === currentUser.id);
   const userApprovals = getApprovalsByUserId(currentUser.id);
   const existingApproval = userApprovals.find(a => a.capabilityId === id);
+  const capabilityRatings = getRatingsByCapabilityId(id || '');
 
   const handleSubmitApply = () => {
     if (!selectedApp || !applyReason) return;
@@ -64,6 +65,20 @@ export default function CapabilityDetail() {
     }
   };
 
+  const handleSubmitRating = () => {
+    if (newRating === 0 || !ratingComment.trim()) return;
+    addRating({
+      capabilityId: id || '',
+      userId: currentUser.id,
+      userName: currentUser.name,
+      rating: newRating,
+      comment: ratingComment,
+    });
+    setShowRatingModal(false);
+    setNewRating(0);
+    setRatingComment('');
+  };
+
   if (!capability) {
     return (
       <div className="flex-1 flex items-center justify-center">
@@ -74,7 +89,6 @@ export default function CapabilityDetail() {
 
   const Icon = iconMap[capability.icon] || MessageSquare;
   const statusBadge = getStatusBadge(capability.status);
-  const filteredRatings = mockRatings.filter(r => r.capabilityId === capability.id);
 
   return (
     <div className="flex-1 flex flex-col overflow-auto">
@@ -282,18 +296,21 @@ export default function CapabilityDetail() {
           {activeTab === 'ratings' && (
             <div>
               <div className="flex items-center justify-between mb-6">
-                <h3 className="text-lg font-semibold text-gray-800">用户评价</h3>
-                <button className="btn-primary flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-gray-800">用户评价 ({capabilityRatings.length})</h3>
+                <button 
+                  onClick={() => setShowRatingModal(true)}
+                  className="btn-primary flex items-center gap-2"
+                >
                   <MessageSquare className="w-4 h-4" />
                   发表评价
                 </button>
               </div>
               
               <div className="space-y-4">
-                {filteredRatings.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">暂无评价</p>
+                {capabilityRatings.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">暂无评价，成为第一个评价者吧</p>
                 ) : (
-                  filteredRatings.map((rating) => (
+                  capabilityRatings.map((rating) => (
                     <div key={rating.id} className="p-4 bg-gray-50 rounded-lg">
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-3">
@@ -362,6 +379,54 @@ export default function CapabilityDetail() {
               className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               提交申请
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal isOpen={showRatingModal} onClose={() => setShowRatingModal(false)} title="发表评价">
+        <div className="space-y-6">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">评分</label>
+            <div className="flex items-center gap-2">
+              {[1, 2, 3, 4, 5].map((star) => (
+                <button
+                  key={star}
+                  onClick={() => setNewRating(star)}
+                  className="p-1 hover:scale-110 transition-transform"
+                >
+                  <Star
+                    className={`w-8 h-8 ${star <= newRating ? 'fill-warning-400 text-warning-400' : 'text-gray-300'}`}
+                  />
+                </button>
+              ))}
+              <span className="ml-2 text-sm text-gray-600">
+                {newRating === 0 ? '请选择评分' : `${newRating}星`}
+              </span>
+            </div>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">评价内容</label>
+            <textarea
+              value={ratingComment}
+              onChange={(e) => setRatingComment(e.target.value)}
+              rows={4}
+              placeholder="请分享您的使用体验..."
+              className="input-field resize-none"
+            />
+          </div>
+          
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+            <button onClick={() => setShowRatingModal(false)} className="btn-secondary">
+              取消
+            </button>
+            <button
+              onClick={handleSubmitRating}
+              disabled={newRating === 0 || !ratingComment.trim()}
+              className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              提交评价
             </button>
           </div>
         </div>

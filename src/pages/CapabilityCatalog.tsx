@@ -71,7 +71,7 @@ export default function CapabilityCatalog() {
                 <div
                   key={cap.id}
                   className="card-hover cursor-pointer group"
-                  onClick={() => navigate(`/capability/${cap.id}`)}
+                  onClick={() => navigate(`/capabilities/${cap.id}`)}
                 >
                   <div className="flex items-start gap-4">
                     <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${

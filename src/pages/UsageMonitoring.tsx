@@ -57,6 +57,42 @@ export default function UsageMonitoring() {
     { value: '90d', label: '90天' },
   ];
 
+  const handleExportReport = () => {
+    const selectedCap = selectedCapability === 'all' 
+      ? '全部能力' 
+      : capabilities.find(c => c.id === selectedCapability)?.name || '未知';
+    
+    const reportData = mockUsageData.map(item => ({
+      日期: item.name,
+      总调用量: item.calls,
+      成功调用: item.success,
+      失败调用: item.fail,
+      成功率: `${((item.success / item.calls) * 100).toFixed(1)}%`,
+    }));
+
+    const csvHeader = '日期,总调用量,成功调用,失败调用,成功率\n';
+    const csvContent = reportData
+      .map(row => `${row.日期},${row.总调用量},${row.成功调用},${row.失败调用},${row.成功率}`)
+      .join('\n');
+    
+    const summary = `\n\n汇总统计\n筛选条件: ${selectedCap}\n时间范围: ${timeRangeOptions.find(o => o.value === timeRange)?.label}\n总调用量,总成功,总失败,整体成功率\n${totalCalls},${totalSuccess},${totalCalls - totalSuccess},${successRate}%`;
+
+    const errorSummary = `\n\n错误原因分布\n错误类型,次数\n${errorDistribution.map(e => `${e.name},${e.value}`).join('\n')}`;
+
+    const fullReport = csvHeader + csvContent + summary + errorSummary;
+    
+    const blob = new Blob(['\ufeff' + fullReport], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `用量报表_${selectedCap}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="flex-1 flex flex-col overflow-auto">
       <Header title="用量监控" subtitle="查看能力调用数据和告警" showSearch={false} />
@@ -83,7 +119,7 @@ export default function UsageMonitoring() {
               ))}
             </select>
           </div>
-          <button className="btn-secondary flex items-center gap-2">
+          <button onClick={handleExportReport} className="btn-secondary flex items-center gap-2">
             <Download className="w-4 h-4" />
             导出报表
           </button>
