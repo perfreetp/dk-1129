@@ -65,6 +65,22 @@ export default function AdminDashboard() {
     if (logFilters.appId && log.applicationId !== logFilters.appId) return false;
     if (logFilters.operationType && log.operation !== logFilters.operationType) return false;
     if (logFilters.userId && log.userId !== logFilters.userId) return false;
+    
+    if (logFilters.timeRange) {
+      const logDate = new Date(log.createdAt);
+      const now = new Date();
+      if (logFilters.timeRange === 'today') {
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (logDate < today) return false;
+      } else if (logFilters.timeRange === '7d') {
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        if (logDate < weekAgo) return false;
+      } else if (logFilters.timeRange === '30d') {
+        const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        if (logDate < monthAgo) return false;
+      }
+    }
+    
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       if (!log.applicationName.toLowerCase().includes(query) && 
@@ -455,6 +471,16 @@ export default function AdminDashboard() {
                   {users.map(user => (
                     <option key={user.id} value={user.id}>{user.name}</option>
                   ))}
+                </select>
+                <select
+                  value={logFilters.timeRange}
+                  onChange={(e) => setLogFilters({ ...logFilters, timeRange: e.target.value })}
+                  className="input-field w-28"
+                >
+                  <option value="">全部时间</option>
+                  <option value="today">今天</option>
+                  <option value="7d">近7天</option>
+                  <option value="30d">近30天</option>
                 </select>
               </div>
               <div className="text-sm text-gray-500">

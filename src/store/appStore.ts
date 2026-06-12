@@ -40,6 +40,7 @@ interface AppStore {
   deleteCredential: (id: string) => void;
 
   submitApproval: (approval: Omit<Approval, 'id' | 'createdAt' | 'updatedAt'>) => void;
+  resubmitApproval: (approvalId: string, newReason: string) => void;
   approveApproval: (id: string, comment?: string) => void;
   rejectApproval: (id: string, comment?: string) => void;
 
@@ -221,6 +222,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
       updatedAt: new Date().toISOString(),
     };
     set((state) => ({ approvals: [...state.approvals, newApproval] }));
+  },
+
+  resubmitApproval: (approvalId, newReason) => {
+    set((state) => ({
+      approvals: state.approvals.map((appr) =>
+        appr.id === approvalId
+          ? {
+              ...appr,
+              status: 'pending' as const,
+              reason: newReason,
+              approverId: undefined,
+              approverName: undefined,
+              comment: undefined,
+              processedAt: undefined,
+              updatedAt: new Date().toISOString(),
+            }
+          : appr
+      ),
+    }));
   },
 
   approveApproval: (id, comment) => {

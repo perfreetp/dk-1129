@@ -9,8 +9,8 @@ import Modal from '../components/Modal';
 const COLORS = ['#165DFF', '#00B42A', '#FF7D00', '#F53F3F', '#8F5CF6'];
 
 const generateMockData = (appId: string, capabilityId: string, range: string) => {
-  const baseMultiplier = appId ? parseInt(appId) / 10 : 1;
-  const capMultiplier = capabilityId ? parseInt(capabilityId) / 10 : 1;
+  const baseMultiplier = appId && appId !== 'all' && !isNaN(parseInt(appId)) ? parseInt(appId) / 10 : 1;
+  const capMultiplier = capabilityId && capabilityId !== 'all' && !isNaN(parseInt(capabilityId)) ? parseInt(capabilityId) / 10 : 1;
   
   const data = {
     '24h': [
@@ -44,11 +44,14 @@ const generateMockData = (appId: string, capabilityId: string, range: string) =>
     })),
   };
   
-  return (data[range as keyof typeof data] || data['7d']).map(item => ({
-    ...item,
-    success: Math.floor(item.calls * (0.92 + Math.random() * 0.06)),
-    fail: item.calls - Math.floor(item.calls * (0.92 + Math.random() * 0.06)),
-  }));
+  return (data[range as keyof typeof data] || data['7d']).map(item => {
+    const success = Math.floor(item.calls * (0.92 + Math.random() * 0.06));
+    return {
+      ...item,
+      success,
+      fail: item.calls - success,
+    };
+  });
 };
 
 export default function UsageMonitoring() {
@@ -65,7 +68,7 @@ export default function UsageMonitoring() {
     timeRange: string;
     date: string;
     fileName: string;
-    filters: { app: string; capability: string; timeRange: string };
+    csvContent: string;
   }>>([]);
 
   const userApps = applications.filter(app => app.userId === currentUser.id);
@@ -167,7 +170,6 @@ export default function UsageMonitoring() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    const filters = { app: selectedApp, capability: selectedCapability, timeRange };
     setExportHistory(prev => [{
       id: Date.now().toString(),
       capability: selectedCapName,
@@ -175,41 +177,22 @@ export default function UsageMonitoring() {
       timeRange: timeRangeOptions.find(o => o.value === timeRange)?.label || '',
       date: new Date().toLocaleString('zh-CN'),
       fileName,
-      filters,
+      csvContent: fullReport,
     }, ...prev].slice(0, 10));
   }, [selectedCapability, selectedApp, timeRange, generateReport, getFilterLabel, timeRangeOptions]);
 
   const handleReDownload = useCallback((record: typeof exportHistory[0]) => {
-    const originalCapability = record.filters.capability;
-    const originalApp = record.filters.app;
-    const originalTimeRange = record.filters.timeRange;
-    
-    const currentCapability = selectedCapability;
-    const currentApp = selectedApp;
-    const currentTimeRange = timeRange;
-
-    setSelectedCapability(originalCapability);
-    setSelectedApp(originalApp);
-    setTimeRange(originalTimeRange);
-
-    setTimeout(() => {
-      const fullReport = generateReport();
-      const blob = new Blob(['\ufeff' + fullReport], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      const url = URL.createObjectURL(blob);
-      link.setAttribute('href', url);
-      link.setAttribute('download', record.fileName);
-      link.style.visibility = 'hidden';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
-
-      setSelectedCapability(currentCapability);
-      setSelectedApp(currentApp);
-      setTimeRange(currentTimeRange);
-    }, 100);
-  }, [selectedCapability, selectedApp, timeRange, generateReport]);
+    const blob = new Blob(['\ufeff' + record.csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', record.fileName);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, []);
 
   return (
     <div className="flex-1 flex flex-col overflow-auto">

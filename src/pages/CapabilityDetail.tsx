@@ -28,7 +28,7 @@ const tabs = [
 export default function CapabilityDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { getCapabilityById, applications, submitApproval, currentUser, getApprovalsByUserId, getRatingsByCapabilityId, addRating, approvals } = useAppStore();
+  const { getCapabilityById, applications, submitApproval, resubmitApproval, currentUser, getApprovalsByUserId, getRatingsByCapabilityId, addRating, approvals } = useAppStore();
   
   const capability = getCapabilityById(id || '');
   const [activeTab, setActiveTab] = useState('overview');
@@ -36,7 +36,7 @@ export default function CapabilityDetail() {
   const [showApplyModal, setShowApplyModal] = useState(false);
   const [showRatingModal, setShowRatingModal] = useState(false);
   const [showExistingModal, setShowExistingModal] = useState(false);
-  const [existingApprovalInfo, setExistingApprovalInfo] = useState<{appName: string; status: string} | null>(null);
+  const [existingApprovalInfo, setExistingApprovalInfo] = useState<{appName: string; status: string; approvalId?: string} | null>(null);
   const [selectedApp, setSelectedApp] = useState('');
   const [applyReason, setApplyReason] = useState('');
   const [newRating, setNewRating] = useState(0);
@@ -50,17 +50,21 @@ export default function CapabilityDetail() {
   const checkExistingApproval = (appId: string) => {
     const existing = approvals.find(a => a.applicationId === appId && a.capabilityId === id);
     if (existing) {
-      setExistingApprovalInfo({ appName: existing.applicationName, status: existing.status });
+      setExistingApprovalInfo({ 
+        appName: existing.applicationName, 
+        status: existing.status,
+        approvalId: existing.id 
+      });
       setShowExistingModal(true);
-      return true;
+      return existing;
     }
-    return false;
+    return null;
   };
 
   const handleAppChange = (appId: string) => {
     setSelectedApp(appId);
-    if (appId && checkExistingApproval(appId)) {
-      return;
+    if (appId) {
+      checkExistingApproval(appId);
     }
   };
 
@@ -68,8 +72,21 @@ export default function CapabilityDetail() {
     if (!selectedApp || !applyReason) return;
     
     const existing = approvals.find(a => a.applicationId === selectedApp && a.capabilityId === id);
+    
+    if (existing && existing.status === 'rejected') {
+      resubmitApproval(existing.id, applyReason);
+      setShowApplyModal(false);
+      setSelectedApp('');
+      setApplyReason('');
+      return;
+    }
+    
     if (existing) {
-      setExistingApprovalInfo({ appName: existing.applicationName, status: existing.status });
+      setExistingApprovalInfo({ 
+        appName: existing.applicationName, 
+        status: existing.status,
+        approvalId: existing.id 
+      });
       setShowExistingModal(true);
       return;
     }

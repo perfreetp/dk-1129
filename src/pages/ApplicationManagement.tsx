@@ -10,7 +10,7 @@ import EmptyState from '../components/EmptyState';
 
 export default function ApplicationManagement() {
   const navigate = useNavigate();
-  const { applications, addApplication, deleteApplication, updateApplication, currentUser, getCredentialsByAppId, addWhitelist, removeWhitelist, addOperationLog, getApprovalsByUserId, getCapabilityById } = useAppStore();
+  const { applications, addApplication, deleteApplication, updateApplication, currentUser, getCredentialsByAppId, addWhitelist, removeWhitelist, addOperationLog, getApprovalsByUserId, getCapabilityById, getOperationLogs } = useAppStore();
   
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -139,6 +139,15 @@ export default function ApplicationManagement() {
       const cap = getCapabilityById(a.capabilityId);
       return { ...a, capability: cap };
     }).filter(a => a.capability);
+  };
+
+  const getRecentCredentialOperation = (appId: string) => {
+    const logs = getOperationLogs();
+    const credentialLogs = logs.filter(log => 
+      log.applicationId === appId && 
+      ['create_credential', 'rotate_credential', 'delete_credential'].includes(log.operation)
+    );
+    return credentialLogs[0] || null;
   };
 
   return (
@@ -291,11 +300,22 @@ export default function ApplicationManagement() {
                     </div>
                   </div>
                   
-                  <div className="mt-4 pt-4 border-t border-gray-100 flex items-center gap-4 text-xs text-gray-400">
-                    <span className="flex items-center gap-1">
+                  <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                    <span className="flex items-center gap-1 text-xs text-gray-400">
                       <Clock className="w-3 h-3" />
                       创建于 {formatDate(app.createdAt)}
                     </span>
+                    {(() => {
+                      const recentOp = getRecentCredentialOperation(app.id);
+                      if (recentOp) {
+                        return (
+                          <span className="text-xs text-gray-500">
+                            最近凭证: {recentOp.operationName} · {formatDate(recentOp.createdAt)}
+                          </span>
+                        );
+                      }
+                      return null;
+                    })()}
                   </div>
                 </div>
               );
